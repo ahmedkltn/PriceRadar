@@ -1,0 +1,1 @@
+from .mytek_scraper import scrape_mytek_all_categories

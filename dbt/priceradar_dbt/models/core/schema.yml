@@ -1,0 +1,9 @@
+version: 2
+models:
+  - name: core_prices
+    columns:
+      - name: offer_id
+        tests: [not_null]
+      - name: price_value
+        tests: [not_null]
+  - name: core_offers
