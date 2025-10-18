@@ -1,7 +1,5 @@
 -- Schemas
 CREATE SCHEMA IF NOT EXISTS raw;
-CREATE SCHEMA IF NOT EXISTS core;
-CREATE SCHEMA IF NOT EXISTS marts;
 
 -- RAW: append-only listing rows from scrapers (you already write df_c here)
 CREATE TABLE IF NOT EXISTS raw.scraped_products (
@@ -27,22 +25,3 @@ CREATE TABLE IF NOT EXISTS raw.scrape_errors (
   error_msg   TEXT,
   created_at  TIMESTAMPTZ DEFAULT now()
 );
-
--- CORE: one offer per vendor URL
-CREATE TABLE IF NOT EXISTS core.offers (
-  offer_id            BIGSERIAL PRIMARY KEY,
-  vendor              TEXT NOT NULL,
-  url                 TEXT NOT NULL UNIQUE,
-  product_name_clean  TEXT,
-  created_at          TIMESTAMPTZ DEFAULT now()
-);
-
--- CORE: append-only price history (only insert when price changes)
-CREATE TABLE IF NOT EXISTS core.prices (
-  price_id     BIGSERIAL PRIMARY KEY,
-  offer_id     BIGINT NOT NULL REFERENCES core.offers(offer_id) ON DELETE CASCADE,
-  price_value  NUMERIC(18,2) NOT NULL,
-  currency     TEXT NOT NULL DEFAULT 'TND',
-  observed_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS ix_core_prices_offer_time ON core.prices(offer_id, observed_at DESC);
