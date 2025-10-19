@@ -1,0 +1,24 @@
+ecommerce_pipeline:
+  outputs:
+    dev:
+      dbname: analytics
+      host: localhost
+      pass: dbt_pass
+      port: 5432
+      schema: analytics_sc
+      threads: 1
+      type: postgres
+      user: dbt_user
+  target: dev
+priceradar_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: postgres
+      user: admin
+      password: admin
+      port: 5432
+      dbname: priceradar
+      schema: public
+      threads: 4

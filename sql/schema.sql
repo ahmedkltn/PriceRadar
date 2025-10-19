@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS airflow;
+
 -- Schemas
 CREATE SCHEMA IF NOT EXISTS raw;
 

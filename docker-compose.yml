@@ -1,4 +1,25 @@
+# docker-compose.yml
+# Full unified stack for PriceRadar (Postgres + Airflow + dbt)
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgres:5432/airflow
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW_HOME: /opt/airflow
+  PYTHONPATH: /opt/airflow/repo
+  DBT_PROFILES_DIR: /opt/airflow/dbt/.dbt
+  DBT_TARGET: container
+  # App DB envs (used by scraper / dbt models)
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: priceradar
+  POSTGRES_USER: admin
+  POSTGRES_PASSWORD: admin
+  SCRAPER_HEADLESS: "true"
+  SCRAPER_TIMEOUT_MS: "30000"
+
 services:
+  # ----------------- PostgreSQL -----------------
   postgres:
     image: postgres:15
     container_name: priceradar-db
@@ -8,8 +29,109 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin
       POSTGRES_DB: priceradar
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d priceradar"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
 
+  # --------------- Airflow base image (build once) ---------------
+  airflow-image:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: priceradar-airflow:latest
+    container_name: priceradar-airflow-image
+    entrypoint: ["bash", "-lc", "sleep 1"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # --------------- Airflow init (creates/migrates DB) ---------------
+  airflow-init:
+    image: priceradar-airflow:latest
+    container_name: priceradar-airflow-init
+    entrypoint: ["/bin/bash", "-lc"]
+    command: |
+      set -e
+      echo "Waiting for Postgres..."
+      until pg_isready -h postgres -p 5432 -U admin; do sleep 2; done
+      echo "Ensuring 'airflow' database exists..."
+      psql -h postgres -U admin -tc "SELECT 1 FROM pg_database WHERE datname='airflow'" | grep -q 1 \
+        || psql -h postgres -U admin -c "CREATE DATABASE airflow;"
+      echo "Running Airflow DB migrations..."
+      airflow db migrate
+      echo "Creating admin user (idempotent)..."
+      airflow users create \
+        --role Admin \
+        --username admin --password admin \
+        --firstname admin --lastname admin \
+        --role Admin --email admin@example.com || true
+      echo "Init done."
+    environment:
+      <<: *airflow-env
+      PGPASSWORD: admin
+    volumes:
+      - ./airflow_dags:/opt/airflow/dags
+      - ./dbt/priceradar_dbt:/opt/airflow/dbt/priceradar_dbt
+      - ./dbt/.dbt:/opt/airflow/dbt/.dbt
+      - ./:/opt/airflow/repo
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # --------------- Airflow webserver ---------------
+  airflow-webserver:
+    image: priceradar-airflow:latest
+    container_name: priceradar-airflow-webserver
+    command: api-server
+    environment:
+      <<: *airflow-env
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./airflow_dags:/opt/airflow/dags
+      - ./dbt/priceradar_dbt:/opt/airflow/dbt/priceradar_dbt
+      - ./dbt/.dbt:/opt/airflow/dbt/.dbt
+      - ./:/opt/airflow/repo
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-image:
+        condition: service_started
+    restart: unless-stopped
+
+  # --------------- Airflow scheduler ---------------
+  airflow-scheduler:
+    image: priceradar-airflow:latest
+    container_name: priceradar-airflow-scheduler
+    command: scheduler
+    environment:
+      <<: *airflow-env
+    volumes:
+      - ./airflow_dags:/opt/airflow/dags
+      - ./dbt/priceradar_dbt:/opt/airflow/dbt/priceradar_dbt
+      - ./dbt/.dbt:/opt/airflow/dbt/.dbt
+      - ./:/opt/airflow/repo
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-image:
+        condition: service_started
+    restart: unless-stopped
+
+# ----------------- Persistent volumes -----------------
 volumes:
   postgres_data:
+  airflow_logs:
