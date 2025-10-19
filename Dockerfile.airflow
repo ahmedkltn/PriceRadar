@@ -11,6 +11,7 @@ USER airflow
 COPY airflow_dags/requirements.txt /requirements.txt
 RUN python -m pip install --no-cache-dir -r /requirements.txt
 RUN python -m playwright install chromium
+RUN python -m pip install --no-cache-dir apache-airflow-providers-fab
 
 # 3) Env
 ENV DBT_PROFILES_DIR=/opt/airflow/dbt/.dbt \

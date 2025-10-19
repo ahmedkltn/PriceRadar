@@ -9,7 +9,7 @@ if REPO_ROOT not in sys.path: sys.path.insert(0, REPO_ROOT)
 
 
 from scripts.scraper.mytek_scraper import scrape_mytek_all_categories
-from scripts.scraper.utils import save_raw_to_db
+from scripts.utils import save_raw_to_db
 
 def run_mytek_scrape():
 
