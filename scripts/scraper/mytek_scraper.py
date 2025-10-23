@@ -1,10 +1,9 @@
 import pandas as pd
 from datetime import datetime
-from ..utils import playwright_page, soup_from_page, to_float_price, backoff, fmt_eta, save_raw_to_db
+from scripts.utils_pkg import playwright_page, soup_from_page, to_float_price, backoff, fmt_eta, save_raw_to_db
 import time
 import logging
 import argparse
-
 # Set up logger
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -o allexport
+source /opt/airflow/repo/.env 2>/dev/null || echo ".env not found or unreadable"
+set +o allexport
+
+export PATH=$PATH:/opt/airflow/.local/bin
 
 # Wait for TCP socket first (no auth)
 until pg_isready -h "${PG_HOST:-postgres}" -p "${PG_PORT:-5432}" >/dev/null 2>&1; do

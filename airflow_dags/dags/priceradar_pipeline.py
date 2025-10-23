@@ -9,15 +9,16 @@ import os, sys
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
-REPO_ROOT = "/opt/airflow/repo"
-if REPO_ROOT not in sys.path: sys.path.insert(0, REPO_ROOT)
 
 from scripts.scraper.mytek_scraper import scrape_mytek_all_categories
-from scripts.utils import save_raw_to_db
+from scripts.utils_pkg import save_raw_to_db
 
 def run_mytek_scrape():
     logger.info("Starting scrape_mytek task")
     try:
+
+
+
         logger.info("Calling scrape_mytek_all_categories")
         df = scrape_mytek_all_categories(max_pages=2, max_cats=5)
         logger.info(f"Scraping completed, got dataframe: {df.shape}")
