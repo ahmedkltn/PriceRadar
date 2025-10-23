@@ -1,4 +1,3 @@
-
 x-airflow-env: &airflow-env
   AIRFLOW__CORE__LOAD_EXAMPLES: "False"
   AIRFLOW__CORE__EXECUTOR: ${AIRFLOW_EXECUTOR}
@@ -7,11 +6,29 @@ x-airflow-env: &airflow-env
   PYTHONPATH: /opt/airflow/repo
   DBT_PROFILES_DIR: /opt/airflow/dbt/.dbt
   DBT_TARGET: container
-  # metadata DB (used by Airflow itself)
+  AIRFLOW__LOGGING__BASE_LOG_FOLDER: /opt/airflow/logs
+  AIRFLOW__LOGGING__LOGGING_LEVEL: DEBUG
+  REFRESH_INTERVAL: "10"
+
+  # Airflow metadata DB
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_AIRFLOW_DB}
-  # Make the web URL consistent with host port
+
+  # Web URL (for links shown in UI/API). OK to point to host-port.
   AIRFLOW__WEBSERVER__BASE_URL: ${AIRFLOW_BASE_URL}
-  # App DB envs (for your DAGs/dbt)
+
+  AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY}
+  AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__SECRET_KEY}
+
+
+  AIRFLOW_TASK_SDK_API_URL: http://airflow-webserver:8080
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-webserver:8080
+
+
+  AIRFLOW__CORE__PARALLELISM: 1
+  AIRFLOW__CORE__DAG_CONCURRENCY: 1
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
+
+  # App DB for your DAG code/dbt
   POSTGRES_HOST: ${PG_HOST}
   POSTGRES_PORT: "${PG_PORT}"
   POSTGRES_DB: ${PG_APPDB}
@@ -36,6 +53,7 @@ services:
       timeout: 3s
       retries: 20
     restart: unless-stopped
+    networks: [priceradar-network]
 
   airflow-image:
     build:
@@ -43,15 +61,16 @@ services:
       dockerfile: Dockerfile.airflow
     image: priceradar-airflow:latest
     container_name: priceradar-airflow-image
-    entrypoint: ["bash","-lc","sleep 1"]
+    entrypoint: ["bash", "-lc", "sleep 1"]
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [priceradar-network]
 
   airflow-init:
     image: priceradar-airflow:latest
     container_name: priceradar-airflow-init
-    entrypoint: ["/bin/bash","-lc"]
+    entrypoint: ["/bin/bash", "-lc"]
     command: ./scripts/bootstrap-airflow.sh
     environment:
       <<: *airflow-env
@@ -75,7 +94,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [priceradar-network]
 
+  # Airflow 2.10+ Execution API server (FastAPI/Uvicorn)
   airflow-webserver:
     image: priceradar-airflow:latest
     container_name: priceradar-airflow-webserver
@@ -96,12 +117,24 @@ services:
         condition: service_completed_successfully
       airflow-image:
         condition: service_started
+    healthcheck:
+      # ✅ health check from inside the container to itself
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v2/monitor/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     restart: unless-stopped
+    networks:
+      priceradar-network:
+        aliases:
+          - airflow-webserver  # belt & suspenders for DNS
 
-  airflow-scheduler:
+  airflow-dag-processor:
     image: priceradar-airflow:latest
-    container_name: priceradar-airflow-scheduler
-    command: scheduler
+    container_name: priceradar-airflow-dag-processor
+    command: dag-processor
+    shm_size: "1gb"
+    mem_limit: "4g"
     environment:
       <<: *airflow-env
     volumes:
@@ -117,7 +150,71 @@ services:
         condition: service_completed_successfully
       airflow-image:
         condition: service_started
+      airflow-webserver:
+        condition: service_healthy
+    healthcheck:
+      # ✅ use service name on the bridge network (not container_name)
+      test: ["CMD-SHELL", "curl -fsS http://airflow-webserver:8080/api/v2/monitor/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     restart: unless-stopped
+    networks: [priceradar-network]
+
+  airflow-scheduler:
+    image: priceradar-airflow:latest
+    container_name: priceradar-airflow-scheduler
+    command: scheduler
+    shm_size: "1gb"
+    mem_limit: "4g"
+    environment:
+      <<: *airflow-env
+    volumes:
+      - ./airflow_dags:/opt/airflow/dags
+      - ./dbt/priceradar_dbt:/opt/airflow/dbt/priceradar_dbt
+      - ./dbt/.dbt:/opt/airflow/dbt/.dbt
+      - ./:/opt/airflow/repo
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-image:
+        condition: service_started
+      airflow-webserver:
+        condition: service_healthy
+      airflow-dag-processor:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [priceradar-network]
+  # add next to webserver/scheduler
+  airflow-triggerer:
+    image: priceradar-airflow:latest
+    container_name: priceradar-airflow-triggerer
+    command: triggerer
+    environment:
+      <<: *airflow-env          
+    volumes:
+      - ./airflow_dags:/opt/airflow/dags
+      - ./dbt/priceradar_dbt:/opt/airflow/dbt/priceradar_dbt
+      - ./dbt/.dbt:/opt/airflow/dbt/.dbt
+      - ./:/opt/airflow/repo
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-image:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - priceradar-network
+
+networks:
+  priceradar-network:
+    driver: bridge
 
 volumes:
   postgres_data:
