@@ -4,3 +4,4 @@
 __pycache__/
 *.pyc
 *.pyo
+airflow_dags/airflow_logs/
