@@ -11,19 +11,15 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
-# --- Load environment variables (.env in project root)
 load_dotenv()
 
-# ─────────────────────────────────────────────
-# 🔧 CONFIGURATION
-# ─────────────────────────────────────────────
 
 HEADLESS = os.getenv("SCRAPER_HEADLESS", "true").lower() == "true"
 TIMEOUT_MS = int(os.getenv("SCRAPER_TIMEOUT_MS", "30000"))
 
 PG_USER = os.getenv("POSTGRES_USER", "admin")
-PG_PASS = os.getenv("POSTGRES_PASSWORD")
-PG_HOST = os.getenv("POSTGRES_HOST", "localhost")
+PG_PASS = os.getenv("POSTGRES_PASSWORD", "admin")
+PG_HOST = os.getenv("POSTGRES_HOST", "postgres")
 PG_PORT = os.getenv("POSTGRES_PORT", "5432")
 PG_DB   = os.getenv("POSTGRES_DB", "priceradar")
 
@@ -31,9 +27,6 @@ DB_URL = f"postgresql+psycopg2://{PG_USER}:{PG_PASS}@{PG_HOST}:{PG_PORT}/{PG_DB}
 
 _engine = create_engine(DB_URL, pool_pre_ping=True)
 
-# ─────────────────────────────────────────────
-# 💰 PRICE NORMALIZER
-# ─────────────────────────────────────────────
 
 def to_float_price(s: str) -> (Optional[float], Optional[str]): # type: ignore
     """
@@ -74,9 +67,6 @@ def to_float_price(s: str) -> (Optional[float], Optional[str]): # type: ignore
     except ValueError:
         return None, curr or "TND"
 
-# ─────────────────────────────────────────────
-# 🧭 PLAYWRIGHT HELPER
-# ─────────────────────────────────────────────
 
 @contextmanager
 def playwright_page(browser_type="chromium", headless=HEADLESS):
@@ -103,9 +93,6 @@ def soup_from_page(page) -> BeautifulSoup:
     html = page.content()
     return BeautifulSoup(html, "html.parser")
 
-# ─────────────────────────────────────────────
-# 💾 DATABASE HELPERS
-# ─────────────────────────────────────────────
 
 def save_raw_to_db(df_c: pd.DataFrame, table: str = "raw.scraped_products"):
     """
@@ -114,7 +101,7 @@ def save_raw_to_db(df_c: pd.DataFrame, table: str = "raw.scraped_products"):
                       vendor, url, category, scraped_at
     """
     if df_c.empty:
-        print("⚠️ No data to insert.")
+        print("No data to insert.")
         return
 
     required_cols = [
@@ -134,11 +121,8 @@ def save_raw_to_db(df_c: pd.DataFrame, table: str = "raw.scraped_products"):
                 VALUES (:product_name, :price_raw, :price_value, :currency, :vendor, :url, :category, :scraped_at)
             """), records
         )
-    print(f"✅ Inserted {len(records)} rows into {table}")
+    print(f"Inserted {len(records)} rows into {table}")
 
-# ─────────────────────────────────────────────
-# 🕒 DELAYS / RETRIES
-# ─────────────────────────────────────────────
 
 def backoff(base=0.5, jitter=0.3):
     """Sleep a bit between page loads to avoid anti-bot detection."""
