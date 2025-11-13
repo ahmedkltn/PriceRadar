@@ -44,22 +44,23 @@ with DAG(
         task_id="scrape_mytek",
         python_callable=run_mytek_scrape,
     )
+    dbt_env = dict(os.environ)
+    dbt_env["DBT_PROFILES_DIR"] = dbt_env.get("DBT_PROFILES_DIR", "/opt/airflow/dbt/.dbt")
+
     dbt_core = BashOperator(
         task_id="dbt_build_core",
         bash_command=(
-            "export PATH=/home/airflow/.local/bin:$PATH && "
             "cd /opt/airflow/dbt/priceradar_dbt && "
             "dbt run --select stg_products_listings core_offers core_prices"
         ),
-        env={"DBT_PROFILES_DIR": os.environ.get("DBT_PROFILES_DIR", "/opt/airflow/dbt/.dbt")},
+        env=dbt_env,
     )
     dbt_marts = BashOperator(
         task_id="dbt_build_marts",
         bash_command=(
-            "export PATH=/home/airflow/.local/bin:$PATH && "
             "cd /opt/airflow/dbt/priceradar_dbt && "
             "dbt run --select v_lates   t_offer_prices"
         ),
-        env={"DBT_PROFILES_DIR": os.environ.get("DBT_PROFILES_DIR", "/opt/airflow/dbt/.dbt")},
+        env=dbt_env,
     )
     scrape >> dbt_core >> dbt_marts

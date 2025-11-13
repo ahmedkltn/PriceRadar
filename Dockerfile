@@ -1,29 +1,49 @@
 FROM apache/airflow:3.1.0
 
-
 ARG AIRFLOW_VERSION=3.1.0
 ARG PYTHON_VERSION=3.12
-ARG CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
 
-
-# 1) System deps (root)
+# ================================================================
+# System Dependencies (as root)
+# ================================================================
 USER root
+
+# Install system packages in one layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libxml2-dev libxslt1-dev \
+    build-essential \
+    libxml2-dev \
+    libxslt1-dev \
+    postgresql-client \
+    libpq-dev \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/airflow/logs && chown -R airflow: /opt/airflow/logs
+# Create and set permissions for Airflow directories
+RUN mkdir -p /opt/airflow/logs /opt/airflow/dbt/.dbt \
+    && chown -R airflow:root /opt/airflow
 
-# 2) Python deps + Playwright as airflow
 USER airflow
-COPY airflow_dags/requirements.txt /requirements.txt
-RUN python -m pip install --no-cache-dir -r /requirements.txt
-RUN python -m playwright install chromium
+
+# Add local bin to PATH
+ENV PATH="/home/airflow/.local/bin:${PATH}"
+
+# Copy requirements and install Python packages
+COPY requirements.txt /requirements.txt
+
+RUN python -m pip install --upgrade pip && \
+    python -m pip install --no-cache-dir -r /requirements.txt
+
 USER root
-RUN playwright install-deps
-USER airflow
-RUN python -m pip install --no-cache-dir apache-airflow-providers-fab
 
-# 3) Env
+# Install Playwright (Python package) and system dependencies as root
+RUN pip install playwright && \
+    playwright install-deps chromium
+
+# Install Chromium browser for Playwright as airflow user so cache is under /home/airflow
+USER airflow
+RUN playwright install chromium
+
+# Environment variables
 ENV DBT_PROFILES_DIR=/opt/airflow/dbt/.dbt \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
