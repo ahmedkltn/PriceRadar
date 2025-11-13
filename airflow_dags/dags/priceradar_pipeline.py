@@ -37,7 +37,7 @@ with DAG(
     is_paused_upon_creation=False,
     default_args=default_args,
 ) as dag:
-    scrape = PythonOperator(
+    scrape_mytek = PythonOperator(
         task_id="scrape_mytek",
         python_callable=run_mytek_scrape,
     )
@@ -56,8 +56,8 @@ with DAG(
         task_id="dbt_build_marts",
         bash_command=(
             "cd /opt/airflow/dbt/priceradar_dbt && "
-            "dbt run --select v_lates   t_offer_prices"
+            "dbt run --select v_lastest_offer_prices"
         ),
         env=dbt_env,
     )
-    scrape >> dbt_core >> dbt_marts
+    scrape_mytek >> dbt_core >> dbt_marts
