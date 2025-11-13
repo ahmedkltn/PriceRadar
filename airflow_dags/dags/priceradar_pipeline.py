@@ -15,11 +15,8 @@ from scripts.utils_pkg import save_raw_to_db
 def run_mytek_scrape():
     logger.info("Starting scrape_mytek task")
     try:
-
-
-
         logger.info("Calling scrape_mytek_all_categories")
-        df = scrape_mytek_all_categories(max_pages=2, max_cats=5)
+        df = scrape_mytek_all_categories(max_pages=4, max_cats=10)
         logger.info(f"Scraping completed, got dataframe: {df.shape}")
         logger.info("Calling save_raw_to_db")
         save_raw_to_db(df)
