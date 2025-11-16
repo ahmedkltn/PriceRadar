@@ -9,6 +9,13 @@ logger = logging.getLogger(__name__)
 
 BASE = "https://www.mytek.tn/"
 
+top_categories = [
+    "https://www.mytek.tn/informatique/ordinateurs-portables/pc-portable.html",
+    "https://www.mytek.tn/informatique/ordinateurs-portables/mac.html",
+    "https://www.mytek.tn/telephonie-tunisie/smartphone-mobile-tunisie/telephone-portable.html",
+    "https://www.mytek.tn/telephonie-tunisie/smartphone-mobile-tunisie/iphone.html"
+]
+
 
 def get_category_links() -> list[str]:
     """Scrape all category links from Mytek homepage"""
@@ -41,9 +48,8 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
     all_products = []
     
     with playwright_page() as page:
-        # Go to the category first, then detect pagination
+        # Go to the category first, then detect pagination (do not wait for price text here)
         page.goto(category_url, timeout=60000)
-        
         try:
             soup_pg = soup_from_page(page)
             nums = []
@@ -56,7 +62,7 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
         except Exception as e:
             logger.warning(f"Could not detect pagination, defaulting to 1 page: {e}")
             max_page_detected = 1
-        
+
         # Cap pages if a max_pages limit is provided
         max_page = min(max_page_detected, max_pages) if isinstance(max_pages, int) and max_pages > 0 else max_page_detected
         logger.info(f"Will scrape {max_page} pages (detected: {max_page_detected}, limit: {max_pages})")
@@ -67,11 +73,29 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
             url = f"{category_url}{'&' if '?' in category_url else '?'}p={p}"
             elapsed = time.time() - started
             logger.info(f"Page {p}/{max_page} | ETA {fmt_eta(elapsed, p, max_page)} | {url}")
-            
+
             page.goto(url, timeout=60000)
             page.wait_for_selector("div.product-container", timeout=30000)
+            # Try to wait for price text to actually load (avoid '\xa0'), but don't fail hard
+            try:
+                page.wait_for_function(
+                    """
+                    () => {
+                      const els = Array.from(
+                        document.querySelectorAll('span.final-price, span.price, .price-wrapper .price')
+                      );
+                      return els.some(e => {
+                        const t = (e.textContent || '').trim();
+                        return t && t !== '\\xa0';
+                      });
+                    }
+                    """,
+                    timeout=10000
+                )
+            except Exception:
+                logger.debug("Price text did not fully load before timeout; continuing with current DOM snapshot.")
             soup = soup_from_page(page)
-            
+
             page_products = 0
             for div in soup.select("div.product-container"):
                 name_tag = div.select_one("h2.product-item-name a")
@@ -80,27 +104,30 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
                     or div.select_one("span.price")
                     or div.select_one(".price-wrapper .price")
                 )
-                
+                img_url = div.select_one("img#seImgProduct")
+
                 if name_tag and price_tag:
                     product_name = name_tag.get_text(strip=True)
                     price_raw = price_tag.get_text(strip=True)
+                    img_url_value = img_url.get("src") if img_url else None
                     price_value, currency = to_float_price(price_raw)
                     product_url = name_tag.get("href")
-                    
+
                     if product_url and product_url.startswith("/"):
                         product_url = BASE + product_url
-                    
+
                     all_products.append({
                         "product_name": product_name,
                         "price_raw": price_raw,
                         "price_value": price_value,
+                        "image_url": img_url_value,
                         "currency": currency or "TND",
                         "vendor": "Mytek",
                         "url": product_url,
                         "scraped_at": datetime.now()
                     })
                     page_products += 1
-            
+
             logger.debug(f"  └─ Extracted {page_products} products from page {p}")
             backoff()
     
@@ -124,6 +151,9 @@ def scrape_mytek_all_categories(max_pages: int = 3, max_cats: int | None = None)
         logger.info(f" Found {total_found} categories. Limited to {len(all_links)} for this run.")
     else:
         logger.info(f" Found {total_found} categories. Processing all.")
+
+    #?? filtre for top categories only
+    all_links = [link for link in all_links if any(x in link.lower() for x in top_categories)]
     
     started = time.time()
     total_cats = len(all_links)

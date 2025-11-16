@@ -7,11 +7,16 @@ WITH base AS (
     COALESCE(currency,'TND') AS currency,
     vendor,
     url,
-    category,
+    image_url,
+    -- raw category path
+    category AS full_category_url,
+    SPLIT_PART(category, '/',4) AS category,
+    SPLIT_PART(SPLIT_PART(category, '/',6),'.',1) AS subcategory,
     scraped_at
   FROM {{ source('raw','scraped_products') }}
   WHERE price_value IS NOT NULL AND NOT price_value::TEXT ILIKE '%nan%'
 ),
+
 hourly_dedup AS (
   SELECT *,
          ROW_NUMBER() OVER (
@@ -20,6 +25,7 @@ hourly_dedup AS (
          ) AS rn
   FROM base
 )
+
 SELECT *
 FROM hourly_dedup
 WHERE rn = 1

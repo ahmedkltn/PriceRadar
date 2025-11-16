@@ -7,7 +7,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/scripts/scraper/mytek_scraper.py",
       "console": "integratedTerminal",
-      "args": ["--max_pages", "2", "--max_cats","2"],
+      "args": ["--max_pages", "2" ],
       "env": {
         "PYTHONPATH": "${workspaceFolder}/scripts"
       }

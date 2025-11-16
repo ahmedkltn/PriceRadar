@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS raw.scraped_products (
   price_raw     TEXT,
   price_value   NUMERIC(18,2),
   currency      TEXT DEFAULT 'TND',
+  image_url     TEXT,
   url           TEXT,
   category      TEXT,
   scraped_at    TIMESTAMPTZ DEFAULT now()

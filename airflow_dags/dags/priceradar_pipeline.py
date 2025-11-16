@@ -16,7 +16,7 @@ def run_mytek_scrape():
     logger.info("Starting scrape_mytek task")
     try:
         logger.info("Calling scrape_mytek_all_categories")
-        df = scrape_mytek_all_categories(max_pages=4, max_cats=10)
+        df = scrape_mytek_all_categories(max_pages=5)
         logger.info(f"Scraping completed, got dataframe: {df.shape}")
         logger.info("Calling save_raw_to_db")
         save_raw_to_db(df)
@@ -48,7 +48,7 @@ with DAG(
         task_id="dbt_build_core",
         bash_command=(
             "cd /opt/airflow/dbt/priceradar_dbt && "
-            "dbt run --select stg_products_listings core_offers core_prices"
+            "dbt run --select stg_products_listings core_offers core_prices dim_vendor_category dim_vendor_subcategory"
         ),
         env=dbt_env,
     )

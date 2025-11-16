@@ -1,6 +1,6 @@
 version: 2
 models:
-  - name: stg_mytek_listings
+  - name: stg_products_listings
     columns:
       - name: url
         tests:

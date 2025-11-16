@@ -28,45 +28,66 @@ DB_URL = f"postgresql+psycopg2://{PG_USER}:{PG_PASS}@{PG_HOST}:{PG_PORT}/{PG_DB}
 _engine = create_engine(DB_URL, pool_pre_ping=True)
 
 
-def to_float_price(s: str) -> (Optional[float], Optional[str]): # type: ignore
+def to_float_price(s: str) -> (Optional[float], Optional[str]):  # type: ignore
     """
     Convert messy price strings into float + currency code.
-    Examples:
-      "1.299,000 DT" -> (1299.00, "TND")
-      "TND 1,299.000" -> (1299.00, "TND")
-      "€1,299" -> (1299.00, "EUR")
+    Handles:
+      - narrow no-break spaces (\u202f)
+      - non-breaking spaces (\xa0)
+      - commas as decimal separators
+      - thousands separators
+      - various currency formats
     """
     if not s:
         return None, None
 
-    # Currency
+    raw = s.strip()
+
+    # --- Detect currency ---
     curr = None
-    m_curr = re.search(r'(TND|DT|USD|EUR|€|\$|£)', s, re.IGNORECASE)
+    m_curr = re.search(r'(TND|DT|USD|EUR|€|\$|£)', raw, re.IGNORECASE)
     if m_curr:
-        curr = m_curr.group(1).upper().replace('€','EUR').replace('$','USD').replace('£','GBP')
-        if curr == 'DT':
-            curr = 'TND'
+        curr = (
+            m_curr.group(1)
+            .upper()
+            .replace("€", "EUR")
+            .replace("$", "USD")
+            .replace("£", "GBP")
+        )
+        if curr == "DT":
+            curr = "TND"
 
-    # Numeric portion
-    m_num = re.search(r'[\d][\d\s.,]*', s)
+    # --- Clean weird spaces ---
+    cleaned = (
+        raw.replace(" ", "")
+            .replace("\u202f", "")
+            .replace("\xa0", "")
+            .replace("\u00A0", "")
+    )
+
+    # --- Extract the numeric portion ---
+    m_num = re.search(r'[\d][\d.,]*', cleaned)
     if not m_num:
-        return None, curr
-    num = m_num.group(0).replace(' ', '').replace('\u00A0', '')
+        return None, curr or "TND"
+    num = m_num.group(0)
 
-    # Determine decimal
-    if ',' in num and '.' in num:
-        if num.rfind('.') > num.rfind(','):
-            num = num.replace(',', '')
+    # --- Normalize decimal/thousand separators ---
+    if "," in num and "." in num:
+        # If last '.' is after last ',' → '.' is decimal separator (remove ',')
+        if num.rfind(".") > num.rfind(","):
+            num = num.replace(",", "")
         else:
-            num = num.replace('.', '').replace(',', '.')
-    elif ',' in num:
-        num = num.replace(',', '.')
+            # ',' is decimal → remove thousands '.' and convert ',' → '.'
+            num = num.replace(".", "").replace(",", ".")
+    elif "," in num:
+        # Only commas → decimal
+        num = num.replace(",", ".")
 
+    # --- Convert ---
     try:
         return float(num), curr or "TND"
-    except ValueError:
+    except Exception:
         return None, curr or "TND"
-
 
 @contextmanager
 def playwright_page(browser_type="chromium", headless=HEADLESS):
@@ -105,7 +126,7 @@ def save_raw_to_db(df_c: pd.DataFrame, table: str = "raw.scraped_products"):
         return
 
     required_cols = [
-        "product_name", "price_raw", "price_value", "currency",
+        "product_name", "price_raw", "price_value", "currency","image_url",
         "vendor", "url", "category", "scraped_at"
     ]
     for c in required_cols:
@@ -117,8 +138,8 @@ def save_raw_to_db(df_c: pd.DataFrame, table: str = "raw.scraped_products"):
         conn.execute(
             text(f"""
                 INSERT INTO {table}
-                (product_name, price_raw, price_value, currency, vendor, url, category, scraped_at)
-                VALUES (:product_name, :price_raw, :price_value, :currency, :vendor, :url, :category, :scraped_at)
+                (product_name, price_raw, price_value, currency, vendor, url, category, scraped_at, image_url)
+                VALUES (:product_name, :price_raw, :price_value, :currency, :vendor, :url, :category, :scraped_at, :image_url)
             """), records
         )
     print(f"Inserted {len(records)} rows into {table}")
