@@ -1,6 +1,14 @@
 version: 2
 models:
-  - name: stg_products_listings
+  - name: stg_mytek_listings
+    columns:
+      - name: url
+        tests:
+          - not_null
+      - name: price_value
+        tests:
+          - not_null
+  - name: stg_tunisianet_listings
     columns:
       - name: url
         tests:

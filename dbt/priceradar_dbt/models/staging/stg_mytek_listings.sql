@@ -15,6 +15,7 @@ WITH base AS (
     scraped_at
   FROM {{ source('raw','scraped_products') }}
   WHERE price_value IS NOT NULL AND NOT price_value::TEXT ILIKE '%nan%'
+    AND LOWER(vendor) = 'mytek'
 ),
 
 hourly_dedup AS (

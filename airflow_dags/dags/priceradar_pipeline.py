@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 from scripts.scraper.mytek_scraper import scrape_mytek_all_categories
+from scripts.scraper.tunisianet_scraper import scrape_tunisianet_all_categories
 from scripts.utils_pkg import save_raw_to_db
 
 def run_mytek_scrape():
@@ -24,7 +25,18 @@ def run_mytek_scrape():
     except Exception as e:
         logger.error(f"Error in scrape_mytek: {str(e)}", exc_info=True)
         raise
-
+def run_tunisianet_scrape():
+    logger.info("Starting scrape_mytek task")
+    try:
+        logger.info("Calling scrape_mytek_all_categories")
+        df = scrape_tunisianet_all_categories(max_pages=5)
+        logger.info(f"Scraping completed, got dataframe: {df.shape}")
+        logger.info("Calling save_raw_to_db")
+        save_raw_to_db(df)
+        logger.info("Data saved to database")
+    except Exception as e:
+        logger.error(f"Error in scrape_tunisianet: {str(e)}", exc_info=True)
+        raise
 default_args = {
     'retries': 0,  
     'retry_delay': timedelta(minutes=5)
@@ -40,6 +52,10 @@ with DAG(
     scrape_mytek = PythonOperator(
         task_id="scrape_mytek",
         python_callable=run_mytek_scrape,
+    )
+    scrape_tunsianet = PythonOperator(
+        task_id="scrape_tunisianet",
+        python_callable=run_tunisianet_scrape,
     )
     dbt_env = dict(os.environ)
     dbt_env["DBT_PROFILES_DIR"] = dbt_env.get("DBT_PROFILES_DIR", "/opt/airflow/dbt/.dbt")
@@ -60,4 +76,4 @@ with DAG(
         ),
         env=dbt_env,
     )
-    scrape_mytek >> dbt_core >> dbt_marts
+    [scrape_mytek, scrape_tunsianet] >> dbt_core >> dbt_marts
