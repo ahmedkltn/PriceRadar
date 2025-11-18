@@ -21,9 +21,11 @@ def get_category_links() -> list[str]:
     logger.info("Fetching Tunisianet category links...")
 
     with playwright_page() as page:
-        page.goto(BASE, timeout=60000)
-        # menu items
-        page.wait_for_selector("li[class*='menu-item'] a", timeout=30000)
+        page.goto(BASE, wait_until="networkidle", timeout=60000)
+
+
+        page.wait_for_selector("li[class*='menu-item'] a", state="attached", timeout=60000)
+
         soup = soup_from_page(page)
 
         links: list[str] = []
