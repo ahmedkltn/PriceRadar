@@ -12,7 +12,9 @@ WITH base AS (
     category AS full_category_url,
     SPLIT_PART(category, '/',4) AS category,
     SPLIT_PART(SPLIT_PART(category, '/',6),'.',1) AS subcategory,
-    scraped_at
+    scraped_at,
+    LOWER(TRIM(brand_name)) AS brand_name,
+    brand_image AS brand_image_url
   FROM {{ source('raw','scraped_products') }}
   WHERE price_value IS NOT NULL AND NOT price_value::TEXT ILIKE '%nan%'
     AND LOWER(vendor) = 'mytek'

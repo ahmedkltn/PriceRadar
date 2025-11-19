@@ -102,6 +102,11 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
                 img_tag = prod.select_one("a.first-img img")
                 image_url = img_tag.get("src") if img_tag else None
 
+                # Brand (logo & name)
+                brand_tag = prod.select_one("img[class*='manufacturer-logo']")
+                brand_name = brand_tag.get("alt") if brand_tag else None
+                brand_image = brand_tag.get("src") if brand_tag else None
+
                 # Product URL
                 url_tag = prod.select_one("h2.product-title a")
                 product_url = url_tag.get("href") if url_tag else None
@@ -114,6 +119,8 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
                         "price_raw": price_raw,
                         "price_value": price_value,
                         "image_url": image_url,
+                        "brand_name": brand_name,
+                        "brand_image": brand_image,
                         "currency": currency or "TND",
                         "vendor": "Tunisianet",
                         "url": product_url,

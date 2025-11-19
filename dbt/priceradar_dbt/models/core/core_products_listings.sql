@@ -10,6 +10,8 @@ SELECT
   full_category_url,
   category,
   subcategory,
+  brand_name,
+  brand_image_url,
   scraped_at
 FROM {{ ref('stg_mytek_listings') }}
 
@@ -25,5 +27,7 @@ SELECT
   full_category_url,
   category,
   subcategory,
+  brand_name,
+  brand_image_url,
   scraped_at
 FROM {{ ref('stg_tunisianet_listings') }}

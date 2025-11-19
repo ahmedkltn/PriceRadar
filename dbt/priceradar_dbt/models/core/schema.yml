@@ -12,3 +12,11 @@ models:
   - name: dim_vendor_category
   - name: dim_vendor_subcategory
   - name: core_products_listings
+  - name: dim_brand
+    columns:
+      - name: vendor_brand_id
+        data_tests:
+          - not_null
+      - name: vendor_brand_name
+        data_tests:
+          - not_null

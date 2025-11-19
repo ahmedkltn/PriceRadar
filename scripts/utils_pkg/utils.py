@@ -127,7 +127,7 @@ def save_raw_to_db(df_c: pd.DataFrame, table: str = "raw.scraped_products"):
 
     required_cols = [
         "product_name", "price_raw", "price_value", "currency","image_url",
-        "vendor", "url", "category", "scraped_at"
+        "vendor", "url", "category", "scraped_at", "brand_name", "brand_image"
     ]
     for c in required_cols:
         if c not in df_c.columns:
@@ -138,8 +138,8 @@ def save_raw_to_db(df_c: pd.DataFrame, table: str = "raw.scraped_products"):
         conn.execute(
             text(f"""
                 INSERT INTO {table}
-                (product_name, price_raw, price_value, currency, vendor, url, category, scraped_at, image_url)
-                VALUES (:product_name, :price_raw, :price_value, :currency, :vendor, :url, :category, :scraped_at, :image_url)
+                (product_name, price_raw, price_value, currency, vendor, url, category, scraped_at, image_url, brand_name, brand_image)
+                VALUES (:product_name, :price_raw, :price_value, :currency, :vendor, :url, :category, :scraped_at, :image_url, :brand_name, :brand_image)
             """), records
         )
     print(f"Inserted {len(records)} rows into {table}")

@@ -104,12 +104,17 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
                     or div.select_one("span.price")
                     or div.select_one(".price-wrapper .price")
                 )
-                img_url = div.select_one("img#seImgProduct")
+                img_url = div.select_one("img[id*='seImgProduct']")
+                img_url_value = img_url.get("src") if img_url else None
+
+                # Brand (logo & name)
+                brand_tag = div.select_one("div.brand img")
+                brand_name = brand_tag.get("alt") if brand_tag else None
+                brand_image = brand_tag.get("src") if brand_tag else None
 
                 if name_tag and price_tag:
                     product_name = name_tag.get_text(strip=True)
                     price_raw = price_tag.get_text(strip=True)
-                    img_url_value = img_url.get("src") if img_url else None
                     price_value, currency = to_float_price(price_raw)
                     product_url = name_tag.get("href")
 
@@ -121,6 +126,8 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
                         "price_raw": price_raw,
                         "price_value": price_value,
                         "image_url": img_url_value,
+                        "brand_name": brand_name,
+                        "brand_image": brand_image,
                         "currency": currency or "TND",
                         "vendor": "Mytek",
                         "url": product_url,
