@@ -5,7 +5,7 @@ WITH base AS (
     vendor,
     category,
     subcategory
-  FROM {{ ref('stg_products_listings') }}
+  FROM {{ ref('core_products_listings') }}
   WHERE subcategory IS NOT NULL
 ),
 

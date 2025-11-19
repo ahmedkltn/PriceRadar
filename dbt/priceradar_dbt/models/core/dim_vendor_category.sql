@@ -4,7 +4,7 @@ WITH base AS (
   SELECT DISTINCT
     vendor,
     category
-  FROM {{ ref('stg_products_listings') }}
+  FROM {{ ref('core_products_listings') }}
   WHERE category IS NOT NULL
 )
 

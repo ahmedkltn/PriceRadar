@@ -64,7 +64,7 @@ with DAG(
         task_id="dbt_build_core",
         bash_command=(
             "cd /opt/airflow/dbt/priceradar_dbt && "
-            "dbt run --select stg_products_listings core_offers core_prices dim_vendor_category dim_vendor_subcategory"
+            "dbt run --select stg_mytek_listings stg_tunisianet_listings core_offers core_prices dim_vendor_category dim_vendor_subcategory"
         ),
         env=dbt_env,
     )

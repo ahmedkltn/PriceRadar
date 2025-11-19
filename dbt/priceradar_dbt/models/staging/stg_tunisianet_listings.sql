@@ -10,8 +10,8 @@ WITH base AS (
     image_url,
     -- raw category path
     category AS full_category_url,
-    SPLIT_PART(category, '/',4) AS category,
-    SPLIT_PART(SPLIT_PART(category, '/',6),'.',1) AS subcategory,
+    regexp_replace(SPLIT_PART(category, '/', 4), '^[0-9]+-', '') AS category,
+    regexp_replace(SPLIT_PART(category, '/', 4), '^[0-9]+-', '')AS subcategory,
     scraped_at
   FROM {{ source('raw','scraped_products') }}
   WHERE price_value IS NOT NULL AND NOT price_value::TEXT ILIKE '%nan%'

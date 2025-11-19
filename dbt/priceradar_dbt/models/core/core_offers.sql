@@ -13,7 +13,7 @@ WITH src AS (
     category,
     subcategory,
     image_url
-  FROM {{ ref('stg_products_listings') }}
+  FROM {{ ref('core_products_listings') }}
 ),
 
 joined AS (

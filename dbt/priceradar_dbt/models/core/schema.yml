@@ -11,3 +11,4 @@ models:
   - name: core_offers
   - name: dim_vendor_category
   - name: dim_vendor_subcategory
+  - name: core_products_listings

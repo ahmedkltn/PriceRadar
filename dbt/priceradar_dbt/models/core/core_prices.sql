@@ -2,7 +2,7 @@
 
 WITH src AS (
   SELECT s.url, s.price_value, s.currency, s.scraped_at
-  FROM {{ ref('stg_products_listings') }} s
+  FROM {{ ref('core_products_listings') }} s
 ),
 offers AS (
   SELECT offer_id, url FROM {{ ref('core_offers') }}

@@ -11,3 +11,6 @@ sources:
     tables:
       - name: offers
       - name: prices
+      - name: products_listings
+      - name: vendor_category
+      - name: vendor_subcategory
