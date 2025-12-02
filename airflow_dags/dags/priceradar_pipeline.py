@@ -13,6 +13,7 @@ from scripts.scraper.mytek_scraper import scrape_mytek_all_categories
 from scripts.scraper.tunisianet_scraper import scrape_tunisianet_all_categories
 from scripts.utils_pkg import save_raw_to_db
 
+
 def run_mytek_scrape():
     logger.info("Starting scrape_mytek task")
     try:
@@ -37,10 +38,22 @@ def run_tunisianet_scrape():
     except Exception as e:
         logger.error(f"Error in scrape_tunisianet: {str(e)}", exc_info=True)
         raise
+
+def run_product_match():
+    from scripts.matching.match_products import match_products
+    logger.info("Starting match_product task")
+    try:
+        logger.info("Calling match_products")
+        match_products()
+        logger.info("Product matching completed")
+    except Exception as e:
+        logger.error(f"Error in match_products: {str(e)}", exc_info=True)
+        raise
 default_args = {
     'retries': 0,  
     'retry_delay': timedelta(minutes=5)
 }
+
 with DAG(
     dag_id="priceradar_pipeline",
     start_date=datetime(2025, 10, 1),
@@ -76,4 +89,8 @@ with DAG(
         ),
         env=dbt_env,
     )
-    [scrape_mytek, scrape_tunsianet] >> dbt_core >> dbt_marts
+    matcher = PythonOperator(
+        task_id="product_matcher",
+        python_callable=run_product_match,
+    )
+    [scrape_mytek, scrape_tunsianet] >> dbt_core >> dbt_marts >> matcher

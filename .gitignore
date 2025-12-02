@@ -4,5 +4,5 @@
 __pycache__/
 *.pyc
 *.pyo
-airflow_dags/airflow_logs/
+airflow_dags/airflow_logs
 .vscode/

@@ -9,7 +9,9 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
+
 
 load_dotenv()
 
@@ -168,3 +170,17 @@ def fmt_eta(elapsed_s: float, done: int, total: int) -> str:
     m, s = divmod(int(remaining), 60)
     h, m = divmod(m, 60)
     return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+
+def get_db_url() -> str:
+    user = os.getenv("POSTGRES_USER", "admin")
+    pwd = os.getenv("POSTGRES_PASSWORD", "admin")
+    host = os.getenv("POSTGRES_HOST", "postgres")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db   = os.getenv("POSTGRES_DB", "priceradar")
+
+    return f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+
+def get_engine(db_url : str, echo: bool = False) -> Engine:
+    return create_engine(db_url, echo=echo, future=True)
