@@ -5,10 +5,13 @@ from .views import (
     ProductPriceHistoryView,
     VendorListView,
     CategoryListView,
+    ProductListView,
 )
 
 urlpatterns = [
     path("api/v1/offers", OfferListView.as_view(), name="offer-list"),
+
+    path("api/v1/products", ProductListView.as_view(), name="product-list"),
     path("api/v1/products/<str:product_id>", ProductDetailView.as_view(), name="product-detail"),
     path(
         "api/v1/products/<str:product_id>/price-history",
