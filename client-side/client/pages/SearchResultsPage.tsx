@@ -1,14 +1,8 @@
 import { useState, useEffect } from "react";
-import { Filter, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import Header from "../components/Header";
 import FilterSidebar from "../components/FilterSidebar";
-import { mockProducts } from "@/data/mockProducts";
 import { SearchFilters, SortOption } from "@/types/product";
-import {
-  filterProducts,
-  sortProducts,
-  paginateProducts,
-} from "@/lib/productFilters";
 import { useLocation, useNavigate } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import Footer from "@/components/Footer";
@@ -22,7 +16,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useGetProductsQuery } from "@/store/products/productApiSlice";
+import {
+  useGetCategoriesQuery,
+  useGetProductsQuery,
+  useGetVendorsQuery,
+} from "@/store/products/productApiSlice";
 
 export default function SearchResultsPage() {
   const location = useLocation();
@@ -31,74 +29,96 @@ export default function SearchResultsPage() {
   // Parse URL parameters
   const searchParams = new URLSearchParams(location.search);
   const queryFromUrl = searchParams.get("q") || "";
-  const categoryFromUrl = searchParams.get("category") || undefined;
+  const categoryIdFromUrl = searchParams.get("category_id") || undefined;
+  const categoryNameFromUrl = searchParams.get("category") || undefined;
+  const subcategoryIdFromUrl = searchParams.get("subcategory_id") || undefined;
+  const pageFromUrl = Number(searchParams.get("page") || 1);
   const [searchInput, setSearchInput] = useState(queryFromUrl);
   const [filters, setFilters] = useState<SearchFilters>({
-    query: queryFromUrl,
-    category: categoryFromUrl,
-    categoryId: undefined,
-    subcategory: undefined,
-    subcategoryId: undefined,
+    query: queryFromUrl || undefined,
+    categoryId: categoryIdFromUrl,
+    subcategoryId: subcategoryIdFromUrl,
     vendors: [],
     minPrice: undefined,
     maxPrice: undefined,
-    inStock: undefined,
   });
 
-  const [sortBy, setSortBy] = useState<SortOption>("relevance");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortOption>("price_asc");
+  const [currentPage, setCurrentPage] = useState(Math.max(1, pageFromUrl));
   const [resultsPerPage, setResultsPerPage] = useState(10);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
+  const { data: categoriesData } = useGetCategoriesQuery();
+  const { data: vendorsData } = useGetVendorsQuery();
+
   // Get data by filters
-  const { data: products, isLoading, error } = useGetProductsQuery(filters);
+  const {
+    data: productsResponse,
+    isLoading,
+    isFetching,
+    error,
+  } = useGetProductsQuery({
+    query: filters.query,
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+    vendors: filters.vendors,
+    categoryId: filters.categoryId,
+    subcategoryId: filters.subcategoryId,
+    sort: sortBy,
+    limit: resultsPerPage,
+    page: currentPage,
+  });
 
   // Update filters when URL parameters change
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const query = searchParams.get("q") || "";
-    const category = searchParams.get("category") || undefined;
+    const params = new URLSearchParams(location.search);
+    const query = params.get("q") || "";
+    const categoryId = params.get("category_id") || undefined;
+    const categoryName = params.get("category") || undefined;
+    const subcategoryId = params.get("subcategory_id") || undefined;
+    const pageFromUrl = Number(params.get("page") || 1);
 
     setFilters((prev) => ({
       ...prev,
-      query,
-      category,
+      query: query || undefined,
+      categoryId: categoryId || undefined,
+      subcategoryId: subcategoryId || undefined,
     }));
-    setCurrentPage(1);
-  }, [location.search]);
+    setSearchInput(query);
+    setCurrentPage(Math.max(1, pageFromUrl));
 
-  // Apply filters and sorting
-  const filteredProducts = filterProducts(mockProducts, filters);
-  const sortedProducts = sortProducts(filteredProducts, sortBy);
-  const paginatedResults = paginateProducts(
-    sortedProducts,
-    currentPage,
-    resultsPerPage,
-  );
+    // If only category name is present (from older links), map it to id when categories are loaded
+    if (!categoryId && categoryName && categoriesData?.categories) {
+      const match = categoriesData.categories.find(
+        (c) => c.name?.toLowerCase() === categoryName.toLowerCase(),
+      );
+      if (match) {
+        const newParams = new URLSearchParams(params);
+        newParams.set("category_id", match.id);
+        newParams.delete("category");
+        navigate(`/search?${newParams.toString()}`, { replace: true });
+      }
+    }
+  }, [location.search, categoriesData, navigate]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [filters, sortBy, resultsPerPage]);
 
   const handleFiltersChange = (newFilters: SearchFilters) => {
-    const isCategoryChanged =
-      newFilters.category && newFilters.category !== filters.category;
     setFilters(newFilters);
 
     // Update URL with new filters
     const searchParams = new URLSearchParams();
 
-    if (newFilters.query) {
-      searchParams.set("q", newFilters.query);
-    }
+    if (newFilters.query) searchParams.set("q", newFilters.query);
+    if (newFilters.categoryId)
+      searchParams.set("category_id", newFilters.categoryId);
+    if (newFilters.subcategoryId)
+      searchParams.set("subcategory_id", newFilters.subcategoryId);
 
-    if (newFilters.category) {
-      searchParams.set("category", newFilters.category);
-    }
-    if (isCategoryChanged)
-      setFilters({ ...newFilters, subcategory: undefined });
+    searchParams.set("page", "1");
 
     navigate(`/search?${searchParams.toString()}`, { replace: true });
   };
@@ -109,6 +129,9 @@ export default function SearchResultsPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    const params = new URLSearchParams(location.search);
+    params.set("page", page.toString());
+    navigate(`/search?${params.toString()}`, { replace: true });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -119,8 +142,12 @@ export default function SearchResultsPage() {
   // Generate page numbers for pagination
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
-    const totalPages = paginatedResults.totalPages;
-    const current = currentPage;
+    const totalPages =
+      Math.max(
+        1,
+        Math.ceil((productsResponse?.total || 0) / resultsPerPage),
+      ) || 1;
+    const current = Math.min(currentPage, totalPages);
 
     if (totalPages <= 7) {
       // Show all pages if 7 or fewer
@@ -155,6 +182,16 @@ export default function SearchResultsPage() {
     return pages;
   };
 
+  const products = productsResponse?.offers || [];
+  const totalResults = productsResponse?.total || 0;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalResults / (productsResponse?.limit || resultsPerPage)),
+  );
+  const selectedCategoryName =
+    categoriesData?.categories.find((c) => c.id === filters.categoryId)?.name ||
+    undefined;
+
   return (
     <div className="min-h-screen bg-[#f8f8f9]">
       <Header />
@@ -166,10 +203,14 @@ export default function SearchResultsPage() {
             {filters.query
               ? `Search results for "${filters.query}"`
               : "All Products"}
-            {filters.category && ` in ${filters.category}`}
+            {selectedCategoryName && ` in ${selectedCategoryName}`}
           </h1>
           <p className="font-['Arimo',sans-serif] text-[16px] text-[#717182]">
-            {paginatedResults.totalResults.toLocaleString()} products found
+            {isLoading && "Loading products..."}
+            {!isLoading &&
+              `${totalResults.toLocaleString()} product${
+                totalResults === 1 ? "" : "s"
+              } found`}
           </p>
         </div>
 
@@ -179,7 +220,9 @@ export default function SearchResultsPage() {
             <FilterSidebar
               filters={filters}
               onFiltersChange={handleFiltersChange}
-              totalResults={paginatedResults.totalResults}
+              totalResults={totalResults}
+              categories={categoriesData?.categories || []}
+              vendors={vendorsData?.vendors || []}
             />
           </div>
 
@@ -190,8 +233,10 @@ export default function SearchResultsPage() {
                 <FilterSidebar
                   filters={filters}
                   onFiltersChange={handleFiltersChange}
-                  totalResults={paginatedResults.totalResults}
+                  totalResults={totalResults}
                   onClose={() => setShowMobileFilters(false)}
+                  categories={categoriesData?.categories || []}
+                  vendors={vendorsData?.vendors || []}
                 />
               </div>
             </div>
@@ -224,9 +269,10 @@ export default function SearchResultsPage() {
                       onChange={(e) => setSearchInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
+                          const trimmed = searchInput.trim();
                           handleFiltersChange({
                             ...filters,
-                            query: searchInput.trim(),
+                            query: trimmed || undefined,
                           });
                         }
                       }}
@@ -252,7 +298,6 @@ export default function SearchResultsPage() {
                           <SelectValue placeholder="Sort by" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="relevance">Relevance</SelectItem>
                           <SelectItem value="price_asc">
                             Price: Low to High
                           </SelectItem>
@@ -294,16 +339,35 @@ export default function SearchResultsPage() {
             </div>
 
             {/* Products Grid */}
-            {paginatedResults.products.length > 0 ? (
+            {error ? (
+              <div className="bg-white rounded-[16px] border border-[rgba(0,0,0,0.1)] p-12 text-center">
+                <h3 className="font-['Arimo',sans-serif] text-[20px] text-neutral-950 mb-3">
+                  Failed to load products
+                </h3>
+                <p className="font-['Arimo',sans-serif] text-[16px] text-[#717182] mb-6">
+                  Please check your connection or try again later.
+                </p>
+                <Button onClick={() => navigate(0)}>Retry</Button>
+              </div>
+            ) : isLoading || isFetching ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                {Array.from({ length: 8 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="h-[320px] bg-white rounded-[16px] border border-[rgba(0,0,0,0.05)] animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : products.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-                  {paginatedResults.products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                  {products.map((product) => (
+                    <ProductCard key={product.product_id} product={product} />
                   ))}
                 </div>
 
                 {/* Pagination */}
-                {paginatedResults.totalPages > 1 && (
+                {totalPages > 1 && (
                   <div className="bg-white rounded-[16px] border border-[rgba(0,0,0,0.1)] p-4 md:p-6">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                       {/* Page Info */}
@@ -311,9 +375,9 @@ export default function SearchResultsPage() {
                         Showing {(currentPage - 1) * resultsPerPage + 1} to{" "}
                         {Math.min(
                           currentPage * resultsPerPage,
-                          paginatedResults.totalResults,
+                          totalResults,
                         )}{" "}
-                        of {paginatedResults.totalResults} results
+                        of {totalResults} results
                       </p>
 
                       {/* Pagination Controls */}
@@ -321,7 +385,7 @@ export default function SearchResultsPage() {
                         {/* Previous Button */}
                         <button
                           onClick={() => handlePageChange(currentPage - 1)}
-                          disabled={!paginatedResults.hasPreviousPage}
+                          disabled={currentPage <= 1}
                           className="p-2 rounded-lg border border-[rgba(0,0,0,0.1)] hover:bg-[#f3f3f5] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                           <ChevronLeft className="size-5" />
@@ -356,7 +420,7 @@ export default function SearchResultsPage() {
                         {/* Next Button */}
                         <button
                           onClick={() => handlePageChange(currentPage + 1)}
-                          disabled={!paginatedResults.hasNextPage}
+                          disabled={currentPage >= totalPages}
                           className="p-2 rounded-lg border border-[rgba(0,0,0,0.1)] hover:bg-[#f3f3f5] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                           <ChevronRight className="size-5" />
@@ -381,7 +445,16 @@ export default function SearchResultsPage() {
                     you're looking for.
                   </p>
                   <Button
-                    onClick={() => navigate("/search")}
+                    onClick={() =>
+                      handleFiltersChange({
+                        query: "",
+                        categoryId: undefined,
+                        subcategoryId: undefined,
+                        vendors: [],
+                        minPrice: undefined,
+                        maxPrice: undefined,
+                      })
+                    }
                     className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-3 rounded-lg font-['Arimo',sans-serif] text-[14px] transition-all"
                   >
                     Clear All Filters

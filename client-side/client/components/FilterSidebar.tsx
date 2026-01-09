@@ -1,10 +1,4 @@
-import {
-  getPriceRange,
-  getUniqueCategories,
-  getUniqueVendors,
-  getUniqueSubcategories,
-} from "@/data/mockProducts";
-import { SearchFilters } from "@/types/product";
+import { CategoryItem, SearchFilters, VendorItem } from "@/types/product";
 import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
@@ -13,6 +7,8 @@ interface FilterSidebarProps {
   onFiltersChange: (filters: SearchFilters) => void;
   totalResults: number;
   onClose?: () => void;
+  categories: CategoryItem[];
+  vendors: VendorItem[];
 }
 
 export default function FilterSidebar({
@@ -20,20 +16,20 @@ export default function FilterSidebar({
   onFiltersChange,
   totalResults,
   onClose,
+  categories,
+  vendors,
 }: FilterSidebarProps) {
   const [expandedSections, setExpandedSections] = useState({
     category: true,
     price: true,
     vendor: true,
     subcategory: false,
-    stock: true,
   });
 
   const isXSmallScreen = window.innerWidth < 450;
-  const priceRange = getPriceRange();
-  const categories = getUniqueCategories();
-  const vendors = getUniqueVendors();
-  const subcategories = getUniqueSubcategories(filters.category);
+  const priceRange = { min: 0, max: 5000 };
+  const selectedCategory = categories.find((c) => c.id === filters.categoryId);
+  const subcategories = selectedCategory?.subcategories ?? [];
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -45,15 +41,12 @@ export default function FilterSidebar({
 
   const clearAllFilters = () => {
     onFiltersChange({
-      query: filters.query, // Keep the search query
-      category: undefined,
+      query: filters.query, // Keep the search query text
       categoryId: undefined,
-      subcategory: undefined,
       subcategoryId: undefined,
       vendors: [],
       minPrice: undefined,
       maxPrice: undefined,
-      inStock: undefined,
     });
   };
 
@@ -117,23 +110,23 @@ export default function FilterSidebar({
           <div className="space-y-2">
             {categories.map((category) => (
               <label
-                key={category}
+                key={category.id}
                 className="flex items-center gap-2 cursor-pointer group"
               >
                 <input
                   type="radio"
                   name="category"
-                  checked={filters.category === category}
+                  checked={filters.categoryId === category.id}
                   onChange={() => {
-                    // Always set the category when clicked, even if it's the same one
-                    updateFilter("category", category);
+                    updateFilter("categoryId", category.id);
+                    updateFilter("subcategoryId", undefined);
                   }}
                   className="size-4 accent-purple-700 focus:ring-purple-700 cursor-pointer"
                 />
                 <span
-                  className={`font-['Arimo',sans-serif] text-[14px] ${filters.category !== category ? "text-neutral-950" : "text-purple-800"} group-hover:text-purple-800 transition-colors`}
+                  className={`font-['Arimo',sans-serif] text-[14px] ${filters.categoryId !== category.id ? "text-neutral-950" : "text-purple-800"} group-hover:text-purple-800 transition-colors`}
                 >
-                  {category}
+                  {category.name}
                 </span>
               </label>
             ))}
@@ -141,7 +134,7 @@ export default function FilterSidebar({
         </FilterSection>
 
         {/* Subcategory Filter (only show if category is selected) */}
-        {filters.category && subcategories.length > 0 && (
+        {filters.categoryId && subcategories.length > 0 && (
           <FilterSection
             title="Subcategory"
             isExpanded={expandedSections.subcategory}
@@ -150,27 +143,27 @@ export default function FilterSidebar({
             <div className="space-y-2">
               {subcategories.map((subcategory) => (
                 <label
-                  key={subcategory}
+                  key={subcategory.id}
                   className="flex items-center gap-2 cursor-pointer group"
                 >
                   <input
                     type="radio"
                     name="subcategory"
-                    checked={filters.subcategory === subcategory}
+                    checked={filters.subcategoryId === subcategory.id}
                     onChange={() =>
                       updateFilter(
-                        "subcategory",
-                        filters.subcategory === subcategory
+                        "subcategoryId",
+                        filters.subcategoryId === subcategory.id
                           ? undefined
-                          : subcategory,
+                          : subcategory.id,
                       )
                     }
                     className="size-4 accent-purple-700 focus:ring-purple-700 cursor-pointer"
                   />
                   <span
-                    className={`font-['Arimo',sans-serif] text-[14px] ${filters.subcategory !== subcategory ? "text-neutral-950" : "text-purple-800"} group-hover:text-purple-800 transition-colors`}
+                    className={`font-['Arimo',sans-serif] text-[14px] ${filters.subcategoryId !== subcategory.id ? "text-neutral-950" : "text-purple-800"} group-hover:text-purple-800 transition-colors`}
                   >
-                    {subcategory}
+                    {subcategory.name}
                   </span>
                 </label>
               ))}
@@ -187,14 +180,14 @@ export default function FilterSidebar({
           <div className="space-y-3">
             <div>
               <label className="block font-['Arimo',sans-serif] text-[12px] text-[#717182] mb-2">
-                Min Price: {filters.minPrice || priceRange.min}DT
+                Min Price: {filters.minPrice ?? priceRange.min}DT
               </label>
               <input
                 type="range"
                 min={priceRange.min}
                 max={priceRange.max}
                 step={50}
-                value={filters.minPrice || priceRange.min}
+                value={filters.minPrice ?? priceRange.min}
                 onChange={(e) =>
                   updateFilter("minPrice", Number(e.target.value))
                 }
@@ -203,14 +196,14 @@ export default function FilterSidebar({
             </div>
             <div>
               <label className="block font-['Arimo',sans-serif] text-[12px] text-[#717182] mb-2">
-                Max Price: {filters.maxPrice || priceRange.max}DT
+                Max Price: {filters.maxPrice ?? priceRange.max}DT
               </label>
               <input
                 type="range"
                 min={priceRange.min}
                 max={priceRange.max}
                 step={50}
-                value={filters.maxPrice || priceRange.max}
+                value={filters.maxPrice ?? priceRange.max}
                 onChange={(e) =>
                   updateFilter("maxPrice", Number(e.target.value))
                 }
@@ -263,58 +256,33 @@ export default function FilterSidebar({
           <div className="space-y-2 max-h-[200px] overflow-y-auto">
             {vendors.map((vendor) => (
               <label
-                key={vendor}
+                key={vendor.name}
                 className="flex items-center gap-2 cursor-pointer group"
               >
                 <input
                   type="checkbox"
-                  checked={filters.vendors?.includes(vendor) || false}
+                  checked={filters.vendors?.includes(vendor.name) || false}
                   onChange={() => {
                     const currentVendors = filters.vendors || [];
-                    if (currentVendors.includes(vendor)) {
-                      // Remove vendor if already selected
+                    if (currentVendors.includes(vendor.name)) {
                       updateFilter(
                         "vendors",
-                        currentVendors.filter((v) => v !== vendor),
+                        currentVendors.filter((v) => v !== vendor.name),
                       );
                     } else {
-                      // Add vendor if not selected
-                      updateFilter("vendors", [...currentVendors, vendor]);
+                      updateFilter("vendors", [...currentVendors, vendor.name]);
                     }
                   }}
                   className="size-4 accent-purple-700 focus:ring-purple-700 rounded cursor-pointer"
                 />
                 <span
-                  className={`font-['Arimo',sans-serif] text-[14px] ${!filters.vendors?.includes(vendor) ? "text-neutral-950" : "text-purple-800"} group-hover:text-purple-800 transition-colors`}
+                  className={`font-['Arimo',sans-serif] text-[14px] ${!filters.vendors?.includes(vendor.name) ? "text-neutral-950" : "text-purple-800"} group-hover:text-purple-800 transition-colors`}
                 >
-                  {vendor}
+                  {vendor.display_name || vendor.name}
                 </span>
               </label>
             ))}
           </div>
-        </FilterSection>
-
-        {/* Stock Filter */}
-        <FilterSection
-          title="Availability"
-          isExpanded={expandedSections.stock}
-          onToggle={() => toggleSection("stock")}
-        >
-          <label className="flex items-center gap-2 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={filters.inStock === true}
-              onChange={(e) =>
-                updateFilter("inStock", e.target.checked ? true : undefined)
-              }
-              className="size-4 accent-purple-700 focus:ring-purple-700 rounded cursor-pointer"
-            />
-            <span
-              className={`font-['Arimo',sans-serif] text-[14px] ${filters.inStock !== true ? "text-neutral-950" : "text-purple-800"} group-hover:text-purple-800 transition-colors`}
-            >
-              In Stock Only
-            </span>
-          </label>
         </FilterSection>
       </div>
     </div>

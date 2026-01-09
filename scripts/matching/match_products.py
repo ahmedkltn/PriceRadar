@@ -107,6 +107,16 @@ def score_pairs(df_c: pd.DataFrame, emb_matrix, id_to_idx):
 
 
 def cluster_matches(df_scores: pd.DataFrame, df_offers: pd.DataFrame):
+    # Guard: if scoring produced no rows (or schema changed), avoid KeyError
+    if df_scores is None or df_scores.empty:
+        # No scored pairs -> every offer becomes its own product
+        all_offers = set(df_offers["offer_id"]) if not df_offers.empty else set()
+        return {oid: i + 1 for i, oid in enumerate(sorted(all_offers))}
+
+    if "final_score" not in df_scores.columns:
+        raise KeyError(
+            f"df_scores is missing 'final_score'. Columns: {list(df_scores.columns)}"
+        )
     # for now: only auto-match strong ones
     df_match = df_scores[df_scores["final_score"] >= SIM_HIGH].copy()
 
@@ -161,7 +171,7 @@ def write_results(offer_to_pid: dict, df_offers: pd.DataFrame, engine):
         clusters.setdefault(temp_pid, []).append(oid)
 
     # --- Load existing mapping and products to preserve/extend product_ids ---
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS public_core;")
 
         conn.exec_driver_sql(
@@ -232,6 +242,28 @@ def write_results(offer_to_pid: dict, df_offers: pd.DataFrame, engine):
         .reset_index()
     )
 
+  
+    with engine.begin() as conn:
+        conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS public_core;")
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS public_core.offer_product_map (
+                offer_id TEXT PRIMARY KEY,
+                product_id INTEGER NOT NULL,
+                confidence TEXT
+            );
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS public_core.dim_product (
+                product_id INTEGER PRIMARY KEY,
+                display_name TEXT,
+                display_image_url TEXT
+            );
+            """
+        )
+
     # --- Upsert into Postgres (no truncate, keep stable product_ids) ---
     with engine.begin() as conn:
         # Upsert mapping
@@ -270,6 +302,8 @@ def match_products():
 
     emb_matrix, id_to_idx = build_embeddings(df_offers)
     df_scores = score_pairs(df_c, emb_matrix, id_to_idx)
+    print(f"df_scores columns: {list(df_scores.columns)}")
+    print(f"df_scores rows: {len(df_scores)}")
     print("Scored pairs sample:")
     print(df_scores.head())
 

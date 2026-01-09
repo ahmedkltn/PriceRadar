@@ -98,7 +98,7 @@ def scrape_category_page(category_url: str, max_pages: int | None = None):
 
             page_products = 0
             for div in soup.select("div.product-container"):
-                name_tag = div.select_one("h2.product-item-name a")
+                name_tag = div.select_one("h1.product-item-name a")
                 price_tag = (
                     div.select_one("span.final-price")
                     or div.select_one("span.price")

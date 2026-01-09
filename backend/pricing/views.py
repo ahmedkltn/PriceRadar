@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import datetime, timedelta
 
 from django.db.models import Count, OuterRef, Subquery
 from rest_framework import status
@@ -45,7 +46,18 @@ class OfferListView(APIView):
         q = request.GET.get("q")
         min_price = request.GET.get("min_price")
         max_price = request.GET.get("max_price")
-        vendor = request.GET.get("vendor")
+        vendor_single = request.GET.get("vendor")
+        vendor_multi = request.GET.getlist("vendor")
+        vendor_csv = request.GET.get("vendors")  # optional comma-separated
+        product_id_param = request.GET.get("product_id")
+
+        vendor_list = []
+        if vendor_multi:
+            vendor_list.extend([v for v in vendor_multi if v])
+        if vendor_csv:
+            vendor_list.extend([v.strip() for v in vendor_csv.split(",") if v.strip()])
+        if vendor_single:
+            vendor_list.append(vendor_single)
 
         category_name_param = request.GET.get("category")        # filter by category name
         category_id_param = request.GET.get("category_id")       # filter by category id
@@ -85,8 +97,8 @@ class OfferListView(APIView):
         if q:
             offers = offers.filter(product_name_clean__icontains=q)
 
-        if vendor:
-            offers = offers.filter(vendor__iexact=vendor)
+        if vendor_list:
+            offers = offers.filter(vendor__in=vendor_list)
 
         # Category filter: prefer category_id, fallback to category name
         if category_id_param:
@@ -97,6 +109,13 @@ class OfferListView(APIView):
         # Subcategory filter
         if subcategory_id_param:
             offers = offers.filter(vendor_subcategory_id=subcategory_id_param)
+
+        # Product filter
+        if product_id_param:
+            try:
+                offers = offers.filter(product_id=int(product_id_param))
+            except (TypeError, ValueError):
+                pass
 
         # Price filters
         if min_price:
@@ -122,8 +141,44 @@ class OfferListView(APIView):
         else:
             offers = offers.order_by("price_value")
 
-        # --- Pagination ---
+        # If filtering by product, collapse to latest price per vendor only
+        if product_id_param:
+            offers = offers.order_by("vendor", "price_value")
+            vendor_seen = set()
+            dedup_offers = []
+            for o in offers:
+                if not o.vendor or o.vendor in vendor_seen:
+                    continue
+                vendor_seen.add(o.vendor)
+                dedup_offers.append(o)
 
+            data = []
+            for o in dedup_offers:
+                data.append({
+                    "offer_id": o.offer_id,
+                    "product_id": o.product_id,
+                    "product_name": o.product_name_clean,
+                    "price": o.price_value,
+                    "currency": o.currency,
+                    "vendor": o.vendor,
+                    "product_image": o.image_url,
+                    "url": o.url,
+                    "scraped_at": o.observed_at,
+                    "category_id": o.category_id,
+                    "category": o.category_name,
+                    "subcategory_id": o.vendor_subcategory_id,
+                    "subcategory": o.subcategory_name,
+                })
+
+            serializer = OfferSerializer(data, many=True)
+            return Response({
+                "page": 1,
+                "limit": len(data),
+                "total": len(data),
+                "offers": serializer.data,
+            })
+
+        # --- Pagination ---
         paginator = OfferPagination()
         page_qs = paginator.paginate_queryset(offers, request)
 
@@ -165,14 +220,55 @@ class ProductListView(APIView):
         min_price = request.GET.get("min_price")
         max_price = request.GET.get("max_price")
         sort = request.GET.get("sort", "price_asc")
+        category_id_param = request.GET.get("category_id")
+        category_name_param = request.GET.get("category")
+        subcategory_id_param = request.GET.get("subcategory_id")
+        subcategory_name_param = request.GET.get("subcategory")
+        vendor_multi = request.GET.getlist("vendor")
+        vendor_csv = request.GET.get("vendors")
+        vendor_single = request.GET.get("vendor")
+
+        vendor_list = []
+        if vendor_multi:
+            vendor_list.extend([v for v in vendor_multi if v])
+        if vendor_csv:
+            vendor_list.extend([v.strip() for v in vendor_csv.split(",") if v.strip()])
+        if vendor_single:
+            vendor_list.append(vendor_single)
 
         # Latest price per offer (view)
         latest_price_qs = VLastestOfferPrices.objects.filter(offer_id=OuterRef("offer_id"))
+
+        # Optional vendor/category filters for mapped offers
+        allowed_offer_ids = CoreOffers.objects.all().values("offer_id")
+        if vendor_list:
+            allowed_offer_ids = allowed_offer_ids.filter(vendor__in=vendor_list)
+        if category_id_param:
+            allowed_offer_ids = allowed_offer_ids.filter(vendor_category_id=category_id_param)
+        elif category_name_param:
+            category_ids = list(
+                DimVendorCategory.objects
+                .filter(vendor_category_name__iexact=category_name_param)
+                .values_list("vendor_category_id", flat=True)
+            )
+            if category_ids:
+                allowed_offer_ids = allowed_offer_ids.filter(vendor_category_id__in=category_ids)
+        if subcategory_id_param:
+            allowed_offer_ids = allowed_offer_ids.filter(vendor_subcategory_id=subcategory_id_param)
+        elif subcategory_name_param:
+            sub_ids = list(
+                DimVendorSubcategory.objects
+                .filter(vendor_subcategory_name__iexact=subcategory_name_param)
+                .values_list("vendor_subcategory_id", flat=True)
+            )
+            if sub_ids:
+                allowed_offer_ids = allowed_offer_ids.filter(vendor_subcategory_id__in=sub_ids)
 
         # For each product, look at its mapped offers, attach latest price, then pick the cheapest offer
         cheapest_mapped_offer_qs = (
             OfferProductMap.objects
             .filter(product_id=OuterRef("product_id"))
+            .filter(offer_id__in=allowed_offer_ids)
             .annotate(
                 price_value=Subquery(latest_price_qs.values("price_value")[:1]),
                 currency=Subquery(latest_price_qs.values("currency")[:1]),
@@ -191,6 +287,7 @@ class ProductListView(APIView):
         offers_count_qs = (
             OfferProductMap.objects
             .filter(product_id=OuterRef("product_id"))
+            .filter(offer_id__in=allowed_offer_ids)
             .values("product_id")
             .annotate(c=Count("offer_id"))
             .values("c")
@@ -206,6 +303,11 @@ class ProductListView(APIView):
                 vendor=Subquery(cheapest_offer_qs.values("vendor")[:1]),
                 url=Subquery(cheapest_offer_qs.values("url")[:1]),
                 offers_count=Subquery(offers_count_qs[:1]),
+            )
+            .filter(
+                product_id__in=OfferProductMap.objects.filter(
+                    offer_id__in=allowed_offer_ids
+                ).values("product_id")
             )
         )
 
@@ -308,6 +410,7 @@ class ProductDetailView(APIView):
                 "price": cheapest.price_value,
                 "url": cheapest.url,
                 "scraped_at": cheapest.observed_at,
+                "currency": cheapest.currency,
             }
 
         payload = {
@@ -320,6 +423,7 @@ class ProductDetailView(APIView):
             "brand": None,
             "description": None,
             "image_url": product.display_image_url,
+            "currency": getattr(cheapest, "currency", None) if cheapest else None,
             "cheapest_offer": cheapest_offer,
             "offers_count": offers_qs.count(),
         }
@@ -368,13 +472,24 @@ class ProductPriceHistoryView(APIView):
 
         vendor_map = {o.offer_id: o.vendor for o in offers_qs}
 
+        weekly_map = {}
+        for p in prices:
+            if not p.observed_at:
+                continue
+            week_start = (p.observed_at - timedelta(days=p.observed_at.weekday())).date()
+            key = week_start.isoformat()
+            current = weekly_map.get(key)
+            price_val = p.price_value
+            if current is None or (price_val is not None and price_val < current["price"]):
+                weekly_map[key] = {
+                    "vendor": vendor_filter or "All vendors",
+                    "price": price_val,
+                    "scraped_at": datetime.combine(week_start, datetime.min.time()),
+                }
+
         history = [
-            {
-                "vendor": vendor_map.get(p.offer_id),
-                "price": p.price_value,
-                "scraped_at": p.observed_at,
-            }
-            for p in prices
+            weekly_map[k]
+            for k in sorted(weekly_map.keys())
         ]
 
         payload = {

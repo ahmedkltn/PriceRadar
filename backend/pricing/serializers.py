@@ -42,6 +42,7 @@ class ProductDetailSerializer(serializers.Serializer):
     brand = serializers.CharField(allow_null=True)
     description = serializers.CharField(allow_null=True)
     image_url = serializers.CharField(allow_null=True)
+    currency = serializers.CharField(allow_null=True)
     cheapest_offer = serializers.DictField(allow_null=True)
     offers_count = serializers.IntegerField()
 
