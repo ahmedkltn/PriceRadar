@@ -1,0 +1,9 @@
+export { Hero } from "./Hero";
+export { TrustedBy } from "./TrustedBy";
+export { Features } from "./Features";
+export { HowItWorks } from "./HowItWorks";
+export { DashboardPreview } from "./DashboardPreview";
+export { TechStack } from "./TechStack";
+export { CTA } from "./CTA";
+export { Footer } from "./Footer";
+export { Navbar } from "./Navbar";
