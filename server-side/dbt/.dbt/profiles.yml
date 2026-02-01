@@ -1,0 +1,12 @@
+priceradar_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: postgres
+      user: admin
+      password: admin
+      port: 5432
+      dbname: priceradar
+      schema: public
+      threads: 4

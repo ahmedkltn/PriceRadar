@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: scraped_products
+
+  - name: core
+    schema: core
+    tables:
+      - name: offers
+      - name: prices
+      - name: products_listings
+      - name: vendor_category
+      - name: vendor_subcategory

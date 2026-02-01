@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list jazzmin %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; {{ opts.verbose_name_plural|capfirst }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+    <div class="alert alert-warning" style="padding: 25px; margin: 20px 0; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="margin-top: 0; color: #856404; font-size: 24px; display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 28px;"></i> Table Not Found
+        </h2>
+        <div style="background: white; padding: 15px; border-radius: 6px; margin: 15px 0; border-left: 4px solid #ffc107;">
+            <p style="font-size: 16px; color: #856404; margin-bottom: 10px; font-weight: 500;">
+                The database table <code style="background: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #d63384;">{{ table_name }}</code> does not exist yet.
+            </p>
+        </div>
+        <p style="color: #856404; font-size: 15px; margin-bottom: 10px;">
+            <strong>This table is created by the dbt/Airflow data pipeline.</strong> The table will appear here once:
+        </p>
+        <ul style="color: #856404; margin-left: 25px; font-size: 14px; line-height: 1.8;">
+            <li><i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>The Airflow DAGs have been executed</li>
+            <li><i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>The dbt models have been built</li>
+            <li><i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>Data has been scraped and processed</li>
+        </ul>
+        <div style="background: #e7f3ff; padding: 12px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #007cba;">
+            <p style="margin: 0; color: #004085; font-size: 14px;">
+                <i class="fas fa-info-circle" style="margin-right: 8px;"></i>
+                <strong>Note:</strong> This is expected behavior. The pricing models are read-only and managed by the data pipeline, not Django migrations.
+            </p>
+        </div>
+    </div>
+    
+    <div style="margin-top: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{% url 'admin:index' %}" class="btn btn-primary" style="padding: 10px 20px; background-color: #007cba; color: white; text-decoration: none; border-radius: 4px; display: inline-block; border: none; cursor: pointer;">
+            <i class="fas fa-home" style="margin-right: 5px;"></i> Back to Admin Home
+        </a>
+        <a href="/api/admin/dashboard/" class="btn btn-info" style="padding: 10px 20px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 4px; display: inline-block; border: none; cursor: pointer;" target="_blank">
+            <i class="fas fa-chart-line" style="margin-right: 5px;"></i> View Admin Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}
